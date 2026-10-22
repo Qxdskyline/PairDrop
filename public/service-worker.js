@@ -1,4 +1,4 @@
-const cacheVersion = 'v1.11.2';
+const cacheVersion = 'v1.11.2-personal-1';
 const cacheTitle = `pairdrop-cache-${cacheVersion}`;
 const relativePathsToCache = [
     './',
@@ -6,6 +6,7 @@ const relativePathsToCache = [
     'manifest.json',
     'styles/styles-main.css',
     'styles/styles-deferred.css',
+    'styles/personal-transfer.css',
     'scripts/browser-tabs-connector.js',
     'scripts/localization.js',
     'scripts/main.js',
