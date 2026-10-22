@@ -29,7 +29,7 @@
     "start_url": "./",
     "display": "standalone",
     "theme_color": "#3367d6",
-    "screenshots" : [
+    "screenshots": [
         {
             "src": "images/pairdrop_screenshot_mobile_1.png",
             "sizes": "1170x2532",
@@ -72,17 +72,21 @@
         }
     ],
     "share_target": {
-        "action": "/",
-        "method":"POST",
+        "action": "./",
+        "method": "POST",
         "enctype": "multipart/form-data",
         "params": {
             "title": "title",
             "text": "text",
             "url": "url",
-            "files": [{
-                "name": "allfiles",
-                "accept": ["*/*"]
-            }]
+            "files": [
+                {
+                    "name": "allfiles",
+                    "accept": [
+                        "*/*"
+                    ]
+                }
+            ]
         }
     },
     "launch_handler": {
