@@ -1,0 +1,11 @@
+{
+  "signalingServer": "pairdrop.net/",
+  "buttons": {
+    "donation_button": {},
+    "twitter_button": {},
+    "mastodon_button": {},
+    "bluesky_button": {},
+    "custom_button": {},
+    "privacypolicy_button": {}
+  }
+}

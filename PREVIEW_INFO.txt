@@ -1,0 +1,3 @@
+PairDrop Personal UI v1 preview, deployed from the feature/personal-ui-v1 branch of Qxdskyline/PairDrop.
+Frontend hosted via GitHub Pages. Device signaling uses pairdrop.net. No self-hosted PairDrop backend.
+This is a preview: pairing, PWA and cross-network file transfer still need real-device validation. Do not use for sensitive files until tested.
