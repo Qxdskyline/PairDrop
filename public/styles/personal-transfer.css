@@ -1,0 +1,127 @@
+/*
+ * Personal Transfer · UI skin for PairDrop.
+ * This file intentionally changes presentation only.
+ * Leave network.js, ui.js, ui-main.js, and server/ unchanged.
+ * Original project: https://github.com/schlagmichdoch/PairDrop
+ */
+
+/* A calmer canvas, compatible with PairDrop's light/dark theme tokens. */
+body {
+    --personal-radius: 20px;
+    --personal-border: color-mix(in srgb, var(--primary-color) 13%, transparent);
+    background:
+        radial-gradient(ellipse 55% 40% at 10% 12%, color-mix(in srgb, var(--primary-color) 9%, transparent), transparent 75%),
+        radial-gradient(ellipse 55% 45% at 90% 90%, color-mix(in srgb, var(--paired-device-color) 9%, transparent), transparent 75%),
+        rgb(var(--bg-color));
+}
+
+/* Dedicated toolbar, without changing or removing any existing action. */
+body > header {
+    align-items: center;
+    min-height: 64px;
+    padding: 10px clamp(12px, 3vw, 32px);
+    border-bottom: 1px solid var(--personal-border);
+    background: color-mix(in srgb, rgb(var(--bg-color)) 90%, transparent);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+body > header:not(.overflow-expanded) { height: 64px; }
+body > header > * { align-self: center; }
+body > header .icon-button {
+    border-radius: 12px;
+    transition: background-color 180ms ease, transform 180ms ease;
+}
+body > header .icon-button:hover {
+    background: color-mix(in srgb, var(--primary-color) 9%, transparent);
+}
+body > header .icon-button:before { border-radius: 12px; }
+
+/* Devices are the primary task. Give them space and a clear target area. */
+body > #center {
+    justify-content: center;
+    gap: clamp(12px, 2vh, 22px);
+    padding: clamp(12px, 3vw, 28px);
+    box-sizing: border-box;
+}
+body > #center > x-peers {
+    max-width: 100%;
+    padding: 14px 10px;
+    box-sizing: border-box;
+    border-radius: 24px;
+    scrollbar-width: thin;
+}
+body x-peer {
+    border-radius: 18px;
+    transition: background-color 150ms ease, transform 150ms ease;
+}
+body x-peer:hover {
+    background: color-mix(in srgb, var(--primary-color) 7%, transparent);
+}
+body x-peer:focus-within {
+    outline: 2px solid color-mix(in srgb, var(--primary-color) 50%, transparent);
+    outline-offset: 2px;
+}
+body x-peer .icon-wrapper {
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+/* Empty state: a friendly, contained landing area instead of loose text. */
+body x-no-peers {
+    max-width: min(560px, calc(100vw - 40px));
+    height: auto;
+    min-height: 120px;
+    box-sizing: border-box;
+    padding: clamp(18px, 4vw, 36px);
+    border-radius: 24px;
+    border: 1px solid var(--personal-border);
+    background: color-mix(in srgb, rgb(var(--bg-color)) 91%, var(--primary-color));
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.035);
+}
+body x-no-peers h2 { font-weight: 600; }
+body x-instructions { opacity: 0.75; line-height: 1.65; }
+
+/* A compact identity and room-status strip. */
+body > footer {
+    width: min(680px, calc(100vw - 24px));
+    margin: 0 auto max(12px, env(safe-area-inset-bottom));
+    padding: 14px 18px;
+    box-sizing: border-box;
+    border: 1px solid var(--personal-border);
+    border-radius: var(--personal-radius);
+    background: color-mix(in srgb, rgb(var(--bg-color)) 93%, var(--primary-color));
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.04);
+}
+body > footer .logo {
+    --icon-size: 40px;
+    margin: 0 0 8px;
+}
+body > footer .discovery-wrapper {
+    margin-top: 10px;
+    border-width: 1px;
+    border-radius: 12px;
+    padding: 4px 8px;
+}
+body #display-name { border-radius: 10px; }
+body .badge { border-radius: 8px; }
+
+/* Dialog polish, while preserving PairDrop's dialog logic and visibility. */
+body x-paper { border-radius: 22px; }
+body .btn { letter-spacing: .035em; }
+body .btn-rounded { border-radius: 12px; }
+body x-toast { border-radius: 14px; }
+
+@media screen and (max-width: 600px) {
+    body > header { padding: 8px 6px; }
+    body > #center { padding: 10px 8px; }
+    body > #center > x-peers { padding: 6px 0; }
+    body > footer {
+        padding: 10px 12px;
+        border-radius: 16px;
+    }
+    body > footer .logo { --icon-size: 32px; }
+    body x-no-peers { padding: 22px 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body x-peer, body > header .icon-button { transition: none; }
+}
