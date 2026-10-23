@@ -571,6 +571,7 @@ body > header.overflow-expanded { height: auto !important; }
     max-height: 290px;
 }
 .workspace-activity-item {
+    position: relative;
     max-width: min(85%, 400px);
     display: flex;
     flex-direction: column;
@@ -600,16 +601,29 @@ body > header.overflow-expanded { height: auto !important; }
     color: var(--pw-muted);
     font-size: 10px;
 }
+/*
+ * Copy is an overlay, not part of the chat bubble's height.
+ * Desktop: show on hover/focus; touch: keep a small discoverable control.
+ */
 .workspace-copy-button {
-    align-self: flex-end;
-    padding: 3px 7px;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
+    position: absolute;
+    top: 7px;
+    right: -37px;
+    width: 32px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--pw-line);
+    border-radius: 9px;
+    background: var(--pw-surface);
     color: var(--pw-muted);
     font: inherit;
     font-size: 10px;
     cursor: pointer;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .04);
+}
+.workspace-activity-item.outgoing .workspace-copy-button {
+    left: -37px;
+    right: auto;
 }
 .workspace-copy-button:hover {
     background: var(--pw-accent-soft);
@@ -618,6 +632,20 @@ body > header.overflow-expanded { height: auto !important; }
 .workspace-copy-button:focus-visible {
     outline: 2px solid var(--pw-accent);
     outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+    .workspace-copy-button {
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(3px);
+        transition: opacity 120ms, transform 120ms, visibility 120ms;
+    }
+    .workspace-activity-item:hover .workspace-copy-button,
+    .workspace-activity-item:focus-within .workspace-copy-button {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
 }
 .workspace-compose {
     display: flex;
@@ -693,6 +721,45 @@ body > header.overflow-expanded { height: auto !important; }
     opacity: .42;
 }
 .workspace-send svg { width: 16px; height: 16px; }
+.workspace-image-button { display: none; }
+.workspace-attachment-feedback {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 3px;
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--pw-accent) 26%, var(--pw-line));
+    background: var(--pw-accent-soft);
+    border-radius: 11px;
+    color: var(--pw-ink);
+    font-size: 11px;
+}
+.workspace-attachment-feedback[hidden] { display: none; }
+.workspace-attachment-feedback > span { flex: 1 1 140px; }
+.workspace-attachment-retry {
+    padding: 5px 9px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--pw-accent);
+    color: #fff;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.workspace-attachment-clear {
+    padding: 1px 7px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--pw-muted);
+    font: inherit;
+    font-size: 18px;
+    cursor: pointer;
+}
+.workspace-attachment-retry:hover, .workspace-attachment-clear:hover { filter: brightness(.95); }
+
 
 /* 4. Existing dialogs and ancillary UI */
 .personal-workspace .shr-panel {
@@ -755,6 +822,11 @@ body x-toast { border-radius: 15px; }
 
 /* 5. Responsive behavior */
 @media (max-width: 780px) {
+    .workspace-image-button { display: inline-flex; }
+    .workspace-compose-buttons { gap: 6px; }
+    .workspace-send { min-height: 38px; padding: 0 11px; font-size: 11px; }
+    .workspace-file-button { white-space: nowrap; }
+
     body > header {
         width: calc(100% - 32px);
         height: 66px !important;
