@@ -16,6 +16,7 @@ class WorkspaceDevices {
         this.onSelectionChanged = onSelectionChanged;
         this.selectedId = null;
         this.shareModeActive = false;
+        this.unreadCounts = new Map();
 
         this.root.setAttribute('role', 'listbox');
         this.root.setAttribute('aria-label', '在线设备');
@@ -23,7 +24,9 @@ class WorkspaceDevices {
     }
 
     getPeers() {
-        return [...this.root.querySelectorAll('x-peer')];
+        // Upstream treats every open browser tab as a discoverable peer.
+        // Other tabs on this same browser are not separate physical devices.
+        return [...this.root.querySelectorAll('x-peer:not(.type-same-browser)')];
     }
 
     current() {
@@ -54,23 +57,46 @@ class WorkspaceDevices {
     select(peerId, userInitiated = false) {
         if (!this.getPeers().some(peer => peer.id === peerId)) return;
         this.selectedId = peerId;
+        this.unreadCounts.delete(peerId);
         this.refresh();
         this.onSelectionChanged(userInitiated);
     }
 
     onPeerAdded() {
         const peers = this.getPeers();
+
+        // A previously selected tab can become hidden as its browser identity
+        // is detected. Always select from genuine remote devices.
+        if (this.selectedId && !peers.some(peer => peer.id === this.selectedId)) {
+            this.selectedId = null;
+        }
         if (!this.selectedId && peers.length === 1) {
             this.selectedId = peers[0].id;
         }
+
         this.refresh();
         this.onSelectionChanged(false);
     }
 
     onPeerDisconnected(peerId) {
+        this.unreadCounts.delete(peerId);
         if (this.selectedId === peerId) this.selectedId = null;
         this.refresh();
         this.onSelectionChanged(false);
+    }
+
+    markIncoming(peerId) {
+        if (!this.getPeers().some(peer => peer.id === peerId)) return;
+
+        // Show the first incoming conversation immediately, otherwise keep
+        // the chosen recipient and mark the sender as having unread messages.
+        if (!this.selectedId) {
+            this.select(peerId);
+        } else if (this.selectedId !== peerId) {
+            const previous = this.unreadCounts.get(peerId) || 0;
+            this.unreadCounts.set(peerId, Math.min(previous + 1, 99));
+            this.refresh();
+        }
     }
 
     setShareMode(active) {
@@ -79,9 +105,17 @@ class WorkspaceDevices {
     }
 
     refresh() {
-        this.getPeers().forEach(peer => {
+        const peers = this.getPeers();
+        this.root.closest('.workspace-devices')
+            .classList.toggle('workspace-empty-visible', peers.length === 0);
+
+        peers.forEach(peer => {
             const selected = peer.id === this.selectedId;
+            const unread = this.unreadCounts.get(peer.id) || 0;
+
             peer.classList.toggle('workspace-selected', selected);
+            peer.classList.toggle('workspace-unread', unread > 0);
+            peer.dataset.unreadCount = unread ? String(unread) : '';
             peer.setAttribute('role', 'option');
             peer.setAttribute('aria-selected', String(selected));
             peer.tabIndex = 0;
@@ -253,6 +287,27 @@ class WorkspaceSessionLog {
             });
 
         item.append(message, meta);
+
+        // The old receive-text modal provided copying. Keep that convenience
+        // inside the conversation, without recreating a blocking dialog.
+        if (entry.kind === 'text' && navigator.clipboard?.writeText) {
+            const copy = document.createElement('button');
+            copy.type = 'button';
+            copy.className = 'workspace-copy-button';
+            copy.textContent = '复制';
+            copy.setAttribute('aria-label', '复制这条文字消息');
+            copy.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(entry.value);
+                    copy.textContent = '已复制';
+                } catch (error) {
+                    copy.textContent = '复制失败';
+                    console.warn('Could not copy message', error);
+                }
+            });
+            item.append(copy);
+        }
+
         return item;
     }
 }
@@ -274,6 +329,10 @@ class PersonalWorkspace {
         this.bindActions();
         this.bindEvents();
         this.refresh();
+
+        // Hand the display of incoming text to this adapter only after all
+        // observers are ready. If this script fails, upstream modal survives.
+        document.body.dataset.textReceiver = 'conversation';
     }
 
     canSend() {
@@ -314,6 +373,7 @@ class PersonalWorkspace {
         });
         window.addEventListener('text-received', event => {
             this.activity.add(event.detail.peerId, 'incoming', 'text', event.detail.text);
+            this.devices.markIncoming(event.detail.peerId);
         });
         window.addEventListener('files-received', event => {
             const filenames = event.detail.files.map(file => file.name).join(' · ');
