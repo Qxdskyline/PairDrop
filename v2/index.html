@@ -174,14 +174,21 @@
                         <div class="workspace-compose-actions">
                             <span class="workspace-compose-hint">Enter 发送 · Shift+Enter 换行</span>
                             <div class="workspace-compose-buttons">
-                                <input id="workspace-file-input" type="file" multiple hidden aria-label="选择发送的文件">
+                                <input id="workspace-file-input" type="file" multiple hidden aria-label="选择任意文件">
+                                <input id="workspace-image-input" type="file" accept="image/*" multiple hidden aria-label="从相册选择图片">
+                                <button id="workspace-image-button" class="workspace-send secondary workspace-image-button" type="button" disabled>相册</button>
                                 <button id="workspace-file-button" class="workspace-send secondary" type="button" disabled>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.2-8.9 8.9a6 6 0 0 1-8.5-8.5l9.3-9.3a4 4 0 0 1 5.7 5.7l-9.3 9.3a2 2 0 0 1-2.8-2.8L15.4 6"/></svg> 文件
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.2-8.9 8.9a6 6 0 0 1-8.5-8.5l9.3-9.3a4 4 0 0 1 5.7 5.7l-9.3 9.3a2 2 0 0 1-2.8-2.8L15.4 6"/></svg> 文件管理
                                 </button>
                                 <button id="workspace-send-button" class="workspace-send" type="button" disabled>
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg> 发送
                                 </button>
                             </div>
+                        </div>
+                        <div class="workspace-attachment-feedback" id="workspace-attachment-feedback" hidden>
+                            <span id="workspace-attachment-status" role="status"></span>
+                            <button id="workspace-attachment-retry" class="workspace-attachment-retry" type="button" hidden>发送所选文件</button>
+                            <button id="workspace-attachment-clear" class="workspace-attachment-clear" type="button" hidden aria-label="清除待发送文件">×</button>
                         </div>
                     </div>
                 </section>
