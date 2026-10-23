@@ -2016,7 +2016,12 @@ class SendTextDialog extends Dialog {
 class ReceiveTextDialog extends Dialog {
     constructor() {
         super('receive-text-dialog');
-        Events.on('text-received', e => this._onText(e.detail.text, e.detail.peerId));
+        Events.on('text-received', e => {
+            // A custom presentation may explicitly take over received text.
+            // Default PairDrop pages keep their existing modal behavior.
+            if (document.body.dataset.textReceiver === 'conversation') return;
+            this._onText(e.detail.text, e.detail.peerId);
+        });
         this.$text = this.$el.querySelector('#text');
         this.$copy = this.$el.querySelector('#copy');
         this.$close = this.$el.querySelector('#close');

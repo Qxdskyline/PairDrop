@@ -252,6 +252,37 @@ body > header.overflow-expanded { height: auto !important; }
     scrollbar-width: thin;
     box-sizing: border-box;
 }
+/*
+ * Another PairDrop tab in the same browser is not a separate device.
+ * Keep upstream peer nodes intact so signaling and cleanup still work.
+ */
+.workspace-devices x-peer.type-same-browser {
+    display: none !important;
+}
+.workspace-devices.workspace-empty-visible x-peers + x-no-peers {
+    display: flex !important;
+}
+
+.workspace-devices x-peer.workspace-unread {
+    position: relative;
+}
+.workspace-devices x-peer.workspace-unread::after {
+    content: attr(data-unread-count);
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    display: grid;
+    place-items: center;
+    min-width: 21px;
+    height: 21px;
+    border-radius: 11px;
+    background: var(--pw-accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    box-shadow: 0 4px 10px color-mix(in srgb, var(--pw-accent) 18%, transparent);
+}
+
 .workspace-devices x-peer {
     display: flex;
     flex: 0 0 auto;
@@ -568,6 +599,25 @@ body > header.overflow-expanded { height: auto !important; }
 .workspace-activity-meta {
     color: var(--pw-muted);
     font-size: 10px;
+}
+.workspace-copy-button {
+    align-self: flex-end;
+    padding: 3px 7px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--pw-muted);
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+}
+.workspace-copy-button:hover {
+    background: var(--pw-accent-soft);
+    color: var(--pw-accent);
+}
+.workspace-copy-button:focus-visible {
+    outline: 2px solid var(--pw-accent);
+    outline-offset: 2px;
 }
 .workspace-compose {
     display: flex;
