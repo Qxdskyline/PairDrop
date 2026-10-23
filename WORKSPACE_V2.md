@@ -1,6 +1,6 @@
 # relay. / Personal Workspace V2
 
-A visual and interaction-layer redesign of PairDrop. This branch is built on `feature/personal-ui-v1` and **does not change the signaling, WebRTC, room, transfer, or persistent pairing implementations**.
+A visual and interaction-layer redesign of PairDrop. This branch is built on `feature/personal-ui-v1` and **does not change the signaling, WebRTC, room, transfer, or persistent pairing implementations**. One narrowly scoped hook in the legacy receive-text UI delegates display to the workspace.
 
 ## Product concept
 
@@ -17,7 +17,7 @@ The design language uses lavender, mint, soft surfaces, purposeful whitespace, a
 | --- | --- |
 | `public/index.html` | Static semantic shell around the original `x-peers`, `x-no-peers`, `x-instructions` and dialog anchors |
 | `public/styles/personal-workspace.css` | Visual tokens, layout, states, responsive design and dialog polish |
-| `public/scripts/personal-workspace.js` | View adapter: selected peer, composer, native event bridge, ephemeral log |
+| `public/scripts/personal-workspace.js` | View adapter: selected peer, composer, native event bridge, ephemeral log, unread badges |\n| `public/scripts/ui.js` | One opt-in presentation switch: suppress the old text modal only when the workspace explicitly declares itself ready |
 | `public/service-worker.js` | Precache new assets; use separate V2 cache prefix |
 | `public/manifest.json` | V2 PWA title, colors and scoped share target |
 
@@ -32,9 +32,9 @@ It consumes `peer-added`, `peer-disconnected`, `peer-display-name-changed`, `roo
 
 ## Upstream functionality retained
 
-- Auto discovery and permanent paired-device lookup
+- Auto discovery and permanent paired-device lookup (another tab in the same browser is hidden from the workspace device picker)
 - Temporary public rooms
-- Receive confirmation and receive / download dialogs
+- File receive confirmation and receive / download dialogs (incoming text appears inline instead of opening the legacy text modal)
 - File-transfer progress from the existing `x-peer` component
 - WebRTC, STUN/TURN, signaling and optional WebSocket fallback
 - Share-target and clipboard/drag share mode
@@ -43,7 +43,7 @@ The adapter does not replace or monkey-patch upstream classes.
 
 ## QA checklist
 
-- [ ] New shell loads without Console errors at desktop and mobile widths
+- [ ] New shell loads without Console errors at desktop and mobile widths\n- [ ] Keep V1 and V2 open in different tabs: V2 hides the local extra tab; V1 stays unchanged\n- [ ] Receive a text message in V2: message bubble appears and the legacy text modal stays closed\n- [ ] Receive a text from a nonselected device: unread badge appears; selecting it clears the badge\n- [ ] Copy received text from the bubble, including HTML-looking content
 - [ ] Device list updates when a peer joins/leaves; selected peer clears after disconnect
 - [ ] Select Device A, send text; select Device B, send files; correct recipients
 - [ ] Drag one or multiple files onto the conversation panel
