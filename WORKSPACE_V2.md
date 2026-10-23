@@ -17,7 +17,7 @@ The design language uses lavender, mint, soft surfaces, purposeful whitespace, a
 | --- | --- |
 | `public/index.html` | Static semantic shell around the original `x-peers`, `x-no-peers`, `x-instructions` and dialog anchors |
 | `public/styles/personal-workspace.css` | Visual tokens, layout, states, responsive design and dialog polish |
-| `public/scripts/personal-workspace.js` | View adapter: selected peer, composer, native event bridge, ephemeral log, unread badges |\n| `public/scripts/ui.js` | One opt-in presentation switch: suppress the old text modal only when the workspace explicitly declares itself ready |
+| `public/scripts/personal-workspace.js` | View adapter: selected peer, composer, browser file picker, native event bridge, ephemeral log, unread badges |\n| `public/scripts/ui.js` | One opt-in presentation switch: suppress the old text modal only when the workspace explicitly declares itself ready |
 | `public/service-worker.js` | Precache new assets; use separate V2 cache prefix |
 | `public/manifest.json` | V2 PWA title, colors and scoped share target |
 
@@ -62,3 +62,12 @@ Avoid opening V1 and V2 concurrently in the same browser during testing: same or
 The V1 site at `/PairDrop/` stays unchanged. V2 preview is deployed at `/PairDrop/v2/` via a nested tree in `gh-pages`. The new feature branch isn't merged into `master`.
 
 Original project: https://github.com/schlagmichdoch/PairDrop • GPL-3.0.
+
+## V2.2 interaction refinements
+
+- Text: V2 suppresses the legacy receive-text modal based on its own workspace root, removing dependency on async initialization order. Legacy V1 remains unchanged.
+- Message copy: copy affordance is overlaid next to the bubble on pointer hover (keyboard focus supported), with a visible compact control on touch devices; messages do not grow taller.
+- Mobile attachments: direct `相册` and `文件管理` buttons; the latter prefers the File System Access API `showOpenFilePicker()` with a document start directory when supported, otherwise native `<input type=file>` picker.
+- Native file picker backgrounding: if the browser suspends and a recipient disappears while picking, chosen files are held as an in-memory draft and require explicit retry after connection recovery. Never silently send to a different selected recipient.
+- Browser lifecycle remains under OS control. We do not modify WebSocket/WebRTC reconnect loops or claim background transfer is guaranteed. PairDrop already reconnects when the page becomes visible.
+- Regression: hover copy (desktop), photo/doc chooser (Android), select files while switching out of browser, paired peer visibility on return, receive text as bubble, file transfer confirmation and downloads.
