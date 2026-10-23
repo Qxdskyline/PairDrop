@@ -565,6 +565,7 @@ body > header.overflow-expanded { height: auto !important; }
 .workspace-activity-list {
     display: flex;
     flex-direction: column;
+    padding-top: 16px;
     gap: 13px;
     width: 100%;
     overflow: auto;
