@@ -1,5 +1,5 @@
-const cacheVersion = 'v1.11.2-personal-1';
-const cacheTitle = `pairdrop-cache-${cacheVersion}`;
+const cacheVersion = 'v1.11.2-workspace-6';
+const cacheTitle = `pairdrop-v2-cache-${cacheVersion}`;
 const relativePathsToCache = [
     './',
     'index.html',
@@ -7,9 +7,11 @@ const relativePathsToCache = [
     'styles/styles-main.css',
     'styles/styles-deferred.css',
     'styles/personal-transfer.css',
+    'styles/personal-workspace.css',
     'scripts/browser-tabs-connector.js',
     'scripts/localization.js',
     'scripts/main.js',
+    'scripts/personal-workspace.js',
     'scripts/network.js',
     'scripts/persistent-storage.js',
     'scripts/ui.js',
@@ -200,7 +202,7 @@ self.addEventListener('activate', evt => {
             .then(cacheNames => {
                 return Promise.all(
                     cacheNames.map(cacheName => {
-                        if (cacheName !== cacheTitle) {
+                        if (cacheName.startsWith('pairdrop-v2-cache-') && cacheName !== cacheTitle) {
                             console.log("Delete cache:", cacheName);
                             return caches.delete(cacheName);
                         }
