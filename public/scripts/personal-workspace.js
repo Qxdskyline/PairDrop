@@ -440,6 +440,52 @@ class WorkspaceComposer {
     }
 }
 
+
+/**
+ * Download link lifecycle for already received files.
+ * The transfer protocol is not touched. This class only reuses Blob objects
+ * emitted by PairDrop's 'files-received' event while the page stays open.
+ */
+class WorkspaceDownloads {
+    static maxRetainedBytes = 256 * 1024 * 1024;
+
+    trimHistory(byPeer) {
+        const received = [...byPeer.values()]
+            .flat()
+            .filter(entry => entry.files?.length)
+            .sort((a, b) => a.sequence - b.sequence);
+
+        let retained = received.reduce(
+            (sum, entry) => sum + entry.files.reduce((n, file) => n + file.size, 0),
+            0
+        );
+
+        // Evict the oldest file *references*, not the message cards.
+        for (const entry of received) {
+            if (retained <= WorkspaceDownloads.maxRetainedBytes) break;
+            retained -= entry.files.reduce((n, file) => n + file.size, 0);
+            entry.files = null;
+        }
+    }
+
+    saveAgain(files) {
+        for (const file of files) {
+            const url = URL.createObjectURL(file);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = file.name || 'received-file';
+            link.hidden = true;
+            document.body.append(link);
+            link.click();
+            link.remove();
+
+            // Delayed revoke allows slow browsers to finish handling the
+            // download gesture. No object URL is stored between clicks.
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+    }
+}
+
 class WorkspaceSessionLog {
     constructor(root) {
         this.root = root;
@@ -447,6 +493,8 @@ class WorkspaceSessionLog {
         this.empty = root.querySelector('#workspace-empty-activity');
         this.byPeer = new Map();
         this.currentId = null;
+        this.downloads = new WorkspaceDownloads();
+        this.nextSequence = 0;
     }
 
     select(peerId) {
@@ -454,12 +502,21 @@ class WorkspaceSessionLog {
         this.render();
     }
 
-    add(peerId, direction, kind, value) {
+    add(peerId, direction, kind, value, receivedFiles = null) {
         if (!peerId || !value) return;
         const history = this.byPeer.get(peerId) || [];
+        const entry = {
+            direction, kind, value, time: new Date(),
+            sequence: this.nextSequence++
+        };
 
-        history.push({direction, kind, value, time: new Date()});
+        if (direction === 'incoming' && kind === 'files' && receivedFiles) {
+            entry.files = [...receivedFiles];
+        }
+
+        history.push(entry);
         this.byPeer.set(peerId, history.slice(-30));
+        this.downloads.trimHistory(this.byPeer);
 
         if (peerId === this.currentId) this.render();
     }
@@ -514,6 +571,25 @@ class WorkspaceSessionLog {
                 }
             });
             item.append(copy);
+        }
+
+        if (entry.kind === 'files' && entry.direction === 'incoming' &&
+            entry.files?.length) {
+            const download = document.createElement('button');
+            download.type = 'button';
+            download.className = 'workspace-download-button';
+            download.textContent = '↓';
+            download.title = '再次保存';
+            download.setAttribute('aria-label', '再次保存收到的文件');
+            download.addEventListener('click', () => {
+                try {
+                    this.downloads.saveAgain(entry.files);
+                } catch (error) {
+                    console.warn('Could not start another download', error);
+                    download.title = '下载启动失败，请重试';
+                }
+            });
+            item.append(download);
         }
 
         return item;
@@ -583,8 +659,9 @@ class PersonalWorkspace {
             this.devices.markIncoming(event.detail.peerId);
         });
         window.addEventListener('files-received', event => {
-            const filenames = event.detail.files.map(file => file.name).join(' · ');
-            this.activity.add(event.detail.peerId, 'incoming', 'files', filenames);
+            const files = [...event.detail.files];
+            const filenames = files.map(file => file.name).join(' · ');
+            this.activity.add(event.detail.peerId, 'incoming', 'files', filenames, files);
         });
     }
 
