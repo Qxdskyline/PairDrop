@@ -128,28 +128,150 @@ class WorkspaceDevices {
     }
 }
 
+
+/**
+ * Browser file chooser bridge.
+ *
+ * "文件管理" prefers the document picker where supported, while "相册" keeps
+ * the platform's photo picker. If Android suspends the page, selected files
+ * are kept as a local draft until an online recipient can be confirmed.
+ */
+class WorkspaceAttachments {
+    constructor(root, canSend, recipientId, sendFiles) {
+        this.canSend = canSend;
+        this.recipientId = recipientId;
+        this.sendFiles = sendFiles;
+        this.fileInput = root.querySelector('#workspace-file-input');
+        this.imageInput = root.querySelector('#workspace-image-input');
+        this.fileButton = root.querySelector('#workspace-file-button');
+        this.imageButton = root.querySelector('#workspace-image-button');
+        this.feedback = root.querySelector('#workspace-attachment-feedback');
+        this.status = root.querySelector('#workspace-attachment-status');
+        this.retry = root.querySelector('#workspace-attachment-retry');
+        this.clear = root.querySelector('#workspace-attachment-clear');
+        this.pendingFiles = [];
+        this.pickerRecipientId = null;
+        this.useDocumentPicker = typeof window.showOpenFilePicker === 'function';
+        this.bind();
+    }
+
+    bind() {
+        this.fileButton.addEventListener('click', () => this.openFiles());
+        this.imageButton.addEventListener('click', () => this.openGallery());
+        this.fileInput.addEventListener('change', () => this.onNativeFiles(this.fileInput));
+        this.imageInput.addEventListener('change', () => this.onNativeFiles(this.imageInput));
+        this.retry.addEventListener('click', () => this.sendPending());
+        this.clear.addEventListener('click', () => this.clearDraft());
+    }
+
+    openGallery() {
+        if (!this.canSend()) return;
+        this.pickerRecipientId = this.recipientId();
+        this.imageInput.click();
+    }
+
+    async openFiles() {
+        if (!this.canSend()) return;
+        this.pickerRecipientId = this.recipientId();
+
+        if (!this.useDocumentPicker) {
+            this.fileInput.click();
+            return;
+        }
+
+        try {
+            const handles = await window.showOpenFilePicker({
+                id: 'relay-documents',
+                startIn: 'documents',
+                multiple: true
+            });
+            const files = await Promise.all(handles.map(handle => handle.getFile()));
+            this.onChosen(files);
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            // On unsupported browsers fall back on the *next user click*.
+            // Trying to open another picker asynchronously may be blocked.
+            this.useDocumentPicker = false;
+            this.showStatus('系统文件选择器不可用，请再点一次「文件管理」');
+            console.warn('File picker fallback enabled:', error);
+        }
+    }
+
+    onNativeFiles(input) {
+        const files = [...input.files];
+        input.value = '';
+        this.onChosen(files);
+    }
+
+    onChosen(files) {
+        if (!files.length) return;
+
+        if (this.canSend() && this.recipientId() === this.pickerRecipientId) {
+            this.clearDraft();
+            this.sendFiles(files);
+            return;
+        }
+
+        // Never send to a changed recipient automatically after a picker
+        // returned from the background. Explicit retry is required.
+        this.pendingFiles = files;
+        this.refresh();
+    }
+
+    sendPending() {
+        if (!this.pendingFiles.length || !this.canSend()) return;
+        const files = [...this.pendingFiles];
+        this.clearDraft();
+        this.sendFiles(files);
+    }
+
+    clearDraft() {
+        this.pendingFiles = [];
+        this.refresh();
+    }
+
+    showStatus(message) {
+        this.feedback.hidden = false;
+        this.status.textContent = message;
+        this.retry.hidden = true;
+        this.clear.hidden = true;
+    }
+
+    refresh() {
+        const online = this.canSend();
+        this.fileButton.disabled = !online;
+        this.imageButton.disabled = !online;
+
+        const count = this.pendingFiles.length;
+        this.feedback.hidden = count === 0;
+        this.status.textContent = count
+            ? (online
+                ? `已选择 ${count} 个文件，确认接收设备后点击发送`
+                : `已暂存 ${count} 个文件，等待设备重新连接`)
+            : '';
+        this.retry.hidden = count === 0 || !online;
+        this.clear.hidden = count === 0;
+    }
+}
+
 class WorkspaceComposer {
     constructor(root, canSend, recipientId) {
         this.root = root;
         this.canSend = canSend;
         this.recipientId = recipientId;
         this.editor = root.querySelector('#workspace-message');
-        this.fileInput = root.querySelector('#workspace-file-input');
-        this.fileButton = root.querySelector('#workspace-file-button');
         this.sendButton = root.querySelector('#workspace-send-button');
         this.dropZone = root.querySelector('.workspace-conversation');
+        this.attachments = new WorkspaceAttachments(
+            root,
+            () => this.canSend(),
+            () => this.recipientId(),
+            files => this.sendFiles(files)
+        );
         this.bindInputs();
     }
 
     bindInputs() {
-        this.fileButton.addEventListener('click', () => this.fileInput.click());
-        this.fileInput.addEventListener('change', () => {
-            if (this.fileInput.files.length) {
-                this.sendFiles([...this.fileInput.files]);
-            }
-            this.fileInput.value = '';
-        });
-
         this.sendButton.addEventListener('click', () => this.sendDraft());
         this.editor.addEventListener('input', () => this.refresh());
 
@@ -202,7 +324,7 @@ class WorkspaceComposer {
     refresh() {
         const enabled = this.canSend();
         this.editor.disabled = !enabled;
-        this.fileButton.disabled = !enabled;
+        this.attachments.refresh();
         this.sendButton.disabled = !enabled || !this.editor.value.trim();
         this.editor.placeholder = enabled
             ? '写点什么，按 Enter 发送…'
@@ -330,9 +452,8 @@ class PersonalWorkspace {
         this.bindEvents();
         this.refresh();
 
-        // Hand the display of incoming text to this adapter only after all
-        // observers are ready. If this script fails, upstream modal survives.
-        document.body.dataset.textReceiver = 'conversation';
+        // Received text is routed by the presence of this workspace shell.
+        // No late mutable flag is needed to select between chat and modal.
     }
 
     canSend() {
