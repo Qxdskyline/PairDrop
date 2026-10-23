@@ -132,10 +132,76 @@ class WorkspaceDevices {
 /**
  * Browser file chooser bridge.
  *
- * "文件管理" prefers the document picker where supported, while "相册" keeps
- * the platform's photo picker. If Android suspends the page, selected files
+ * Different choices route to a document picker, image picker or camera.
+ * If Android suspends the page, selected files
  * are kept as a local draft until an online recipient can be confirmed.
  */
+/**
+ * App-owned upload chooser. Platform-owned Android chooser sheets cannot be
+ * extended. This accessible sheet offers explicit routes into native pickers.
+ */
+class WorkspaceUploadSheet {
+    constructor(root, onChoose) {
+        this.panel = root.querySelector('#workspace-picker');
+        this.trigger = root.querySelector('#workspace-file-button');
+        this.choices = [...this.panel.querySelectorAll('[data-workspace-pick]')];
+        this.onChoose = onChoose;
+        this.bind();
+    }
+
+    bind() {
+        const closeIds = [
+            '#workspace-picker-close',
+            '#workspace-picker-cancel',
+            '#workspace-picker-backdrop'
+        ];
+        for (const id of closeIds) {
+            this.panel.querySelector(id).addEventListener('click', () => this.close());
+        }
+        for (const choice of this.choices) {
+            choice.addEventListener('click', () => {
+                const kind = choice.dataset.workspacePick;
+                this.close(false);
+                this.onChoose(kind);
+            });
+        }
+        this.panel.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.close();
+            }
+            // Small modal focus loop; hidden browser file inputs aren't tabbable.
+            if (event.key === 'Tab') {
+                const focusables = [
+                    this.panel.querySelector('#workspace-picker-close'),
+                    ...this.choices,
+                    this.panel.querySelector('#workspace-picker-cancel')
+                ];
+                const first = focusables[0];
+                const last = focusables[focusables.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
+        });
+    }
+
+    open() {
+        this.panel.hidden = false;
+        this.choices[0].focus();
+    }
+
+    close(restoreFocus = true) {
+        this.panel.hidden = true;
+        if (restoreFocus) this.trigger.focus();
+    }
+}
+
 class WorkspaceAttachments {
     constructor(root, canSend, recipientId, sendFiles) {
         this.canSend = canSend;
@@ -143,8 +209,10 @@ class WorkspaceAttachments {
         this.sendFiles = sendFiles;
         this.fileInput = root.querySelector('#workspace-file-input');
         this.imageInput = root.querySelector('#workspace-image-input');
+        this.cameraInput = root.querySelector('#workspace-camera-input');
+        this.videoInput = root.querySelector('#workspace-video-input');
         this.fileButton = root.querySelector('#workspace-file-button');
-        this.imageButton = root.querySelector('#workspace-image-button');
+        this.picker = new WorkspaceUploadSheet(root, kind => this.openKind(kind));
         this.feedback = root.querySelector('#workspace-attachment-feedback');
         this.status = root.querySelector('#workspace-attachment-status');
         this.retry = root.querySelector('#workspace-attachment-retry');
@@ -156,18 +224,36 @@ class WorkspaceAttachments {
     }
 
     bind() {
-        this.fileButton.addEventListener('click', () => this.openFiles());
-        this.imageButton.addEventListener('click', () => this.openGallery());
-        this.fileInput.addEventListener('change', () => this.onNativeFiles(this.fileInput));
-        this.imageInput.addEventListener('change', () => this.onNativeFiles(this.imageInput));
+        this.fileButton.addEventListener('click', () => {
+            if (this.canSend()) this.picker.open();
+        });
+        for (const input of [
+            this.fileInput, this.imageInput, this.cameraInput, this.videoInput
+        ]) {
+            input.addEventListener('change', () => this.onNativeFiles(input));
+        }
         this.retry.addEventListener('click', () => this.sendPending());
         this.clear.addEventListener('click', () => this.clearDraft());
     }
 
-    openGallery() {
+    openKind(kind) {
         if (!this.canSend()) return;
         this.pickerRecipientId = this.recipientId();
-        this.imageInput.click();
+
+        switch (kind) {
+            case 'camera':
+                this.cameraInput.click();
+                break;
+            case 'video':
+                this.videoInput.click();
+                break;
+            case 'gallery':
+                this.imageInput.click();
+                break;
+            case 'files':
+                this.openFiles();
+                break;
+        }
     }
 
     async openFiles() {
@@ -240,7 +326,7 @@ class WorkspaceAttachments {
     refresh() {
         const online = this.canSend();
         this.fileButton.disabled = !online;
-        this.imageButton.disabled = !online;
+        if (!online && !this.picker.panel.hidden) this.picker.close(false);
 
         const count = this.pendingFiles.length;
         this.feedback.hidden = count === 0;
@@ -354,6 +440,52 @@ class WorkspaceComposer {
     }
 }
 
+
+/**
+ * Download link lifecycle for already received files.
+ * The transfer protocol is not touched. This class only reuses Blob objects
+ * emitted by PairDrop's 'files-received' event while the page stays open.
+ */
+class WorkspaceDownloads {
+    static maxRetainedBytes = 256 * 1024 * 1024;
+
+    trimHistory(byPeer) {
+        const received = [...byPeer.values()]
+            .flat()
+            .filter(entry => entry.files?.length)
+            .sort((a, b) => a.sequence - b.sequence);
+
+        let retained = received.reduce(
+            (sum, entry) => sum + entry.files.reduce((n, file) => n + file.size, 0),
+            0
+        );
+
+        // Evict the oldest file *references*, not the message cards.
+        for (const entry of received) {
+            if (retained <= WorkspaceDownloads.maxRetainedBytes) break;
+            retained -= entry.files.reduce((n, file) => n + file.size, 0);
+            entry.files = null;
+        }
+    }
+
+    saveAgain(files) {
+        for (const file of files) {
+            const url = URL.createObjectURL(file);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = file.name || 'received-file';
+            link.hidden = true;
+            document.body.append(link);
+            link.click();
+            link.remove();
+
+            // Delayed revoke allows slow browsers to finish handling the
+            // download gesture. No object URL is stored between clicks.
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+    }
+}
+
 class WorkspaceSessionLog {
     constructor(root) {
         this.root = root;
@@ -361,6 +493,8 @@ class WorkspaceSessionLog {
         this.empty = root.querySelector('#workspace-empty-activity');
         this.byPeer = new Map();
         this.currentId = null;
+        this.downloads = new WorkspaceDownloads();
+        this.nextSequence = 0;
     }
 
     select(peerId) {
@@ -368,12 +502,21 @@ class WorkspaceSessionLog {
         this.render();
     }
 
-    add(peerId, direction, kind, value) {
+    add(peerId, direction, kind, value, receivedFiles = null) {
         if (!peerId || !value) return;
         const history = this.byPeer.get(peerId) || [];
+        const entry = {
+            direction, kind, value, time: new Date(),
+            sequence: this.nextSequence++
+        };
 
-        history.push({direction, kind, value, time: new Date()});
+        if (direction === 'incoming' && kind === 'files' && receivedFiles) {
+            entry.files = [...receivedFiles];
+        }
+
+        history.push(entry);
         this.byPeer.set(peerId, history.slice(-30));
+        this.downloads.trimHistory(this.byPeer);
 
         if (peerId === this.currentId) this.render();
     }
@@ -428,6 +571,25 @@ class WorkspaceSessionLog {
                 }
             });
             item.append(copy);
+        }
+
+        if (entry.kind === 'files' && entry.direction === 'incoming' &&
+            entry.files?.length) {
+            const download = document.createElement('button');
+            download.type = 'button';
+            download.className = 'workspace-download-button';
+            download.textContent = '↓';
+            download.title = '再次保存';
+            download.setAttribute('aria-label', '再次保存收到的文件');
+            download.addEventListener('click', () => {
+                try {
+                    this.downloads.saveAgain(entry.files);
+                } catch (error) {
+                    console.warn('Could not start another download', error);
+                    download.title = '下载启动失败，请重试';
+                }
+            });
+            item.append(download);
         }
 
         return item;
@@ -497,8 +659,9 @@ class PersonalWorkspace {
             this.devices.markIncoming(event.detail.peerId);
         });
         window.addEventListener('files-received', event => {
-            const filenames = event.detail.files.map(file => file.name).join(' · ');
-            this.activity.add(event.detail.peerId, 'incoming', 'files', filenames);
+            const files = [...event.detail.files];
+            const filenames = files.map(file => file.name).join(' · ');
+            this.activity.add(event.detail.peerId, 'incoming', 'files', filenames, files);
         });
     }
 

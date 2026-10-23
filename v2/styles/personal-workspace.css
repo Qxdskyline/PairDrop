@@ -565,6 +565,7 @@ body > header.overflow-expanded { height: auto !important; }
 .workspace-activity-list {
     display: flex;
     flex-direction: column;
+    padding-top: 16px;
     gap: 13px;
     width: 100%;
     overflow: auto;
@@ -605,7 +606,8 @@ body > header.overflow-expanded { height: auto !important; }
  * Copy is an overlay, not part of the chat bubble's height.
  * Desktop: show on hover/focus; touch: keep a small discoverable control.
  */
-.workspace-copy-button {
+.workspace-copy-button,
+.workspace-download-button {
     position: absolute;
     top: 7px;
     right: -37px;
@@ -621,27 +623,33 @@ body > header.overflow-expanded { height: auto !important; }
     cursor: pointer;
     box-shadow: 0 3px 10px rgba(0, 0, 0, .04);
 }
-.workspace-activity-item.outgoing .workspace-copy-button {
+.workspace-activity-item.outgoing .workspace-copy-button,
+.workspace-activity-item.outgoing .workspace-download-button {
     left: -37px;
     right: auto;
 }
-.workspace-copy-button:hover {
+.workspace-copy-button:hover,
+.workspace-download-button:hover {
     background: var(--pw-accent-soft);
     color: var(--pw-accent);
 }
-.workspace-copy-button:focus-visible {
+.workspace-copy-button:focus-visible,
+.workspace-download-button:focus-visible {
     outline: 2px solid var(--pw-accent);
     outline-offset: 2px;
 }
 @media (hover: hover) and (pointer: fine) {
-    .workspace-copy-button {
+    .workspace-copy-button,
+    .workspace-download-button {
         opacity: 0;
         visibility: hidden;
         transform: translateY(3px);
         transition: opacity 120ms, transform 120ms, visibility 120ms;
     }
     .workspace-activity-item:hover .workspace-copy-button,
-    .workspace-activity-item:focus-within .workspace-copy-button {
+    .workspace-activity-item:hover .workspace-download-button,
+    .workspace-activity-item:focus-within .workspace-copy-button,
+    .workspace-activity-item:focus-within .workspace-download-button {
         opacity: 1;
         visibility: visible;
         transform: translateY(0);
@@ -721,7 +729,7 @@ body > header.overflow-expanded { height: auto !important; }
     opacity: .42;
 }
 .workspace-send svg { width: 16px; height: 16px; }
-.workspace-image-button { display: none; }
+
 .workspace-attachment-feedback {
     display: flex;
     flex-wrap: wrap;
@@ -760,6 +768,151 @@ body > header.overflow-expanded { height: auto !important; }
 }
 .workspace-attachment-retry:hover, .workspace-attachment-clear:hover { filter: brightness(.95); }
 
+
+
+/* App-owned chooser. Native ColorOS action sheets are not editable from JS. */
+.workspace-picker[hidden] { display: none !important; }
+.workspace-picker {
+    position: fixed;
+    inset: 0;
+    z-index: 140;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+.workspace-picker-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(10, 16, 32, .5);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    cursor: default;
+}
+.workspace-picker-panel {
+    position: relative;
+    z-index: 1;
+    width: min(460px, calc(100vw - 24px));
+    padding: 22px 24px max(20px, env(safe-area-inset-bottom));
+    margin-bottom: 16px;
+    box-sizing: border-box;
+    border-radius: 26px;
+    border: 1px solid var(--pw-line);
+    box-shadow: 0 22px 60px rgba(4, 9, 25, .22);
+    color: var(--pw-ink);
+    background: var(--pw-surface);
+}
+.workspace-picker-handle {
+    width: 42px;
+    height: 4px;
+    border-radius: 5px;
+    background: var(--pw-line);
+    margin: -7px auto 20px;
+}
+.workspace-picker-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+}
+.workspace-picker-heading h2 {
+    color: var(--pw-ink);
+    font-weight: 800;
+    font-size: 20px;
+    margin: 7px 0 5px;
+    line-height: 1.4;
+}
+.workspace-picker-heading p {
+    color: var(--pw-muted);
+    margin: 0;
+    font-size: 12px;
+}
+.workspace-picker-close {
+    min-width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 10px;
+    color: var(--pw-muted);
+    background: var(--pw-surface-soft);
+    font-size: 25px;
+    cursor: pointer;
+}
+.workspace-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+.workspace-picker-grid button {
+    min-width: 0;
+    min-height: 96px;
+    border: 1px solid var(--pw-line);
+    border-radius: 17px;
+    background: var(--pw-surface-soft);
+    color: var(--pw-ink);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+.workspace-picker-grid button:hover,
+.workspace-picker-grid button:focus-visible {
+    border-color: var(--pw-accent);
+    background: var(--pw-accent-soft);
+    outline: none;
+}
+.workspace-picker-symbol {
+    width: 43px;
+    height: 43px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    background: var(--pw-accent-soft);
+    color: var(--pw-accent);
+    font-size: 25px;
+}
+.workspace-picker-cancel {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    border: 1px solid var(--pw-line);
+    border-radius: 14px;
+    color: var(--pw-muted);
+    background: var(--pw-surface-soft);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+@media (max-width: 480px) {
+    .workspace-picker-panel {
+        width: 100%;
+        margin: 0;
+        border-radius: 25px 25px 0 0;
+        padding: 22px 16px max(23px, env(safe-area-inset-bottom));
+    }
+    .workspace-picker-grid { gap: 8px; }
+    .workspace-picker-grid button { min-height: 90px; font-size: 11px; }
+    .workspace-picker-symbol { width: 39px; height: 39px; }
+}
+@media (hover: none) and (pointer: coarse) {
+    .workspace-copy-button,
+    .workspace-download-button {
+        top: -13px;
+        right: -3px;
+        width: 32px;
+        height: 30px;
+    }
+    .workspace-activity-item.outgoing .workspace-copy-button {
+        top: -13px;
+        left: -3px;
+        right: auto;
+    }
+}
 
 /* 4. Existing dialogs and ancillary UI */
 .personal-workspace .shr-panel {
@@ -822,7 +975,6 @@ body x-toast { border-radius: 15px; }
 
 /* 5. Responsive behavior */
 @media (max-width: 780px) {
-    .workspace-image-button { display: inline-flex; }
     .workspace-compose-buttons { gap: 6px; }
     .workspace-send { min-height: 38px; padding: 0 11px; font-size: 11px; }
     .workspace-file-button { white-space: nowrap; }
