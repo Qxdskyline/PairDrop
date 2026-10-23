@@ -19,6 +19,9 @@ class PersonalWorkspace {
         this.shareModeActive = false;
         this.activities = new Map();
 
+        this.devices.setAttribute('role', 'listbox');
+        this.devices.setAttribute('aria-label', '在线设备');
+
         this.bindControls();
         this.bindPairDropEvents();
         this.render();
@@ -37,6 +40,15 @@ class PersonalWorkspace {
             this.selectPeer(peer.id);
         }, true);
 
+        this.devices.addEventListener('keydown', event => {
+            const peer = event.target.closest('x-peer');
+            if (peer !== event.target || this.shareModeActive) return;
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+
+            event.preventDefault();
+            this.selectPeer(peer.id);
+        });
+
         this.fileButton.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', () => {
             if (this.fileInput.files.length) {
@@ -49,7 +61,7 @@ class PersonalWorkspace {
         this.editor.addEventListener('input', () => this.updateComposer());
 
         this.editor.addEventListener('keydown', event => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
                 event.preventDefault();
                 this.sendMessage();
             }
@@ -196,7 +208,12 @@ class PersonalWorkspace {
         peers.forEach(peer => {
             const isSelected = peer.id === this.selectedPeerId;
             peer.classList.toggle('workspace-selected', isSelected);
+            peer.setAttribute('role', 'option');
+            peer.tabIndex = 0;
             peer.setAttribute('aria-selected', String(isSelected));
+            if (!this.shareModeActive) {
+                peer.querySelector('label').title = '选择设备。发送文件请使用右侧文件按钮。';
+            }
         });
 
         this.root.classList.toggle('workspace-has-selection', !!current);
