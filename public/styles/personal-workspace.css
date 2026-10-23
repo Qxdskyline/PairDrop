@@ -112,6 +112,7 @@ body > header .icon-button:hover {
 }
 body > header .icon-button:before { border-radius: 13px; }
 body > header:not(.overflow-expanded) { height: 78px !important; }
+body > header.overflow-expanded { height: auto !important; }
 
 /* 2. Workspace structure */
 #center {
@@ -711,6 +712,7 @@ body x-toast { border-radius: 15px; }
         padding: 9px 0 7px 130px;
     }
     body > header:not(.overflow-expanded) { height: 66px !important; }
+    body > header.overflow-expanded { height: auto !important; }
     body > header::after {
         content: "✦  relay.";
         top: 20px;
