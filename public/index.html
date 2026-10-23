@@ -174,11 +174,12 @@
                         <div class="workspace-compose-actions">
                             <span class="workspace-compose-hint">Enter 发送 · Shift+Enter 换行</span>
                             <div class="workspace-compose-buttons">
-                                <input id="workspace-file-input" type="file" multiple hidden aria-label="选择任意文件">
-                                <input id="workspace-image-input" type="file" accept="image/*" multiple hidden aria-label="从相册选择图片">
-                                <button id="workspace-image-button" class="workspace-send secondary workspace-image-button" type="button" disabled>相册</button>
-                                <button id="workspace-file-button" class="workspace-send secondary" type="button" disabled>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.2-8.9 8.9a6 6 0 0 1-8.5-8.5l9.3-9.3a4 4 0 0 1 5.7 5.7l-9.3 9.3a2 2 0 0 1-2.8-2.8L15.4 6"/></svg> 文件管理
+                                <input id="workspace-file-input" type="file" accept="*/*" multiple hidden aria-label="选择文件">
+                                <input id="workspace-image-input" type="file" accept="image/*,video/*" multiple hidden aria-label="选择照片或视频">
+                                <input id="workspace-camera-input" type="file" accept="image/*" capture="environment" hidden aria-label="拍摄照片">
+                                <input id="workspace-video-input" type="file" accept="video/*" capture="environment" hidden aria-label="拍摄视频">
+                                <button id="workspace-file-button" class="workspace-send secondary" type="button" aria-haspopup="dialog" aria-controls="workspace-picker" disabled>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.2-8.9 8.9a6 6 0 0 1-8.5-8.5l9.3-9.3a4 4 0 0 1 5.7 5.7l-9.3 9.3a2 2 0 0 1-2.8-2.8L15.4 6"/></svg> 上传文件
                                 </button>
                                 <button id="workspace-send-button" class="workspace-send" type="button" disabled>
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg> 发送
@@ -193,6 +194,28 @@
                     </div>
                 </section>
             </div>
+        <!-- Custom chooser: Android's native action sheet cannot be extended by websites. -->
+        <div id="workspace-picker" class="workspace-picker" role="dialog" aria-modal="true" aria-labelledby="workspace-picker-title" hidden>
+            <button id="workspace-picker-backdrop" class="workspace-picker-backdrop" type="button" tabindex="-1" aria-label="关闭上传选择"></button>
+            <div class="workspace-picker-panel">
+                <div class="workspace-picker-handle" aria-hidden="true"></div>
+                <div class="workspace-picker-heading">
+                    <div>
+                        <div class="workspace-eyebrow">SEND A FILE</div>
+                        <h2 id="workspace-picker-title">选择上传方式</h2>
+                        <p>从设备中选择内容，发送给当前联系人</p>
+                    </div>
+                    <button id="workspace-picker-close" class="workspace-picker-close" type="button" aria-label="关闭">×</button>
+                </div>
+                <div class="workspace-picker-grid">
+                    <button type="button" data-workspace-pick="camera"><span class="workspace-picker-symbol" aria-hidden="true">📷</span>拍照</button>
+                    <button type="button" data-workspace-pick="video"><span class="workspace-picker-symbol" aria-hidden="true">🎥</span>拍视频</button>
+                    <button type="button" data-workspace-pick="gallery"><span class="workspace-picker-symbol" aria-hidden="true">▧</span>照片和视频</button>
+                    <button type="button" data-workspace-pick="files"><span class="workspace-picker-symbol" aria-hidden="true">▤</span>选择文件</button>
+                </div>
+                <button id="workspace-picker-cancel" class="workspace-picker-cancel" type="button">取消</button>
+            </div>
+        </div>
         <div class="shr-panel panel column" hidden>
             <div class="row">
                 <div class="thumb center">
