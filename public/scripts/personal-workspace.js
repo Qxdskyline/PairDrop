@@ -174,8 +174,8 @@ class WorkspaceUploadSheet {
             // Small modal focus loop; hidden browser file inputs aren't tabbable.
             if (event.key === 'Tab') {
                 const focusables = [
-                    ...this.choices,
                     this.panel.querySelector('#workspace-picker-close'),
+                    ...this.choices,
                     this.panel.querySelector('#workspace-picker-cancel')
                 ];
                 const first = focusables[0];
