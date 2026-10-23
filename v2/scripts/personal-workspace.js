@@ -225,7 +225,13 @@ class WorkspaceAttachments {
 
     bind() {
         this.fileButton.addEventListener('click', () => {
-            if (this.canSend()) this.picker.open();
+            if (!this.canSend()) return;
+            if (window.matchMedia('(max-width: 780px)').matches) {
+                this.picker.open();
+            } else {
+                this.pickerRecipientId = this.recipientId();
+                this.openFiles();
+            }
         });
         for (const input of [
             this.fileInput, this.imageInput, this.cameraInput, this.videoInput
@@ -278,7 +284,7 @@ class WorkspaceAttachments {
             // On unsupported browsers fall back on the *next user click*.
             // Trying to open another picker asynchronously may be blocked.
             this.useDocumentPicker = false;
-            this.showStatus('系统文件选择器不可用，请再点一次「文件管理」');
+            this.showStatus('系统文件选择器不可用，请再次选择「选择文件」');
             console.warn('File picker fallback enabled:', error);
         }
     }
