@@ -130,168 +130,44 @@ class WorkspaceDevices {
 
 
 /**
- * Browser file chooser bridge.
+ * Native file input bridge.
  *
- * Different choices route to a document picker, image picker or camera.
- * If Android suspends the page, selected files
- * are kept as a local draft until an online recipient can be confirmed.
+ * Keep a single upload action: click opens the browser's native file picker,
+ * with no app-owned intermediary. If Android suspends the page, the selected
+ * files remain as an in-memory draft until a recipient is available.
  */
-/**
- * App-owned upload chooser. Platform-owned Android chooser sheets cannot be
- * extended. This accessible sheet offers explicit routes into native pickers.
- */
-class WorkspaceUploadSheet {
-    constructor(root, onChoose) {
-        this.panel = root.querySelector('#workspace-picker');
-        this.trigger = root.querySelector('#workspace-file-button');
-        this.choices = [...this.panel.querySelectorAll('[data-workspace-pick]')];
-        this.onChoose = onChoose;
-        this.bind();
-    }
-
-    bind() {
-        const closeIds = [
-            '#workspace-picker-close',
-            '#workspace-picker-cancel',
-            '#workspace-picker-backdrop'
-        ];
-        for (const id of closeIds) {
-            this.panel.querySelector(id).addEventListener('click', () => this.close());
-        }
-        for (const choice of this.choices) {
-            choice.addEventListener('click', () => {
-                const kind = choice.dataset.workspacePick;
-                this.close(false);
-                this.onChoose(kind);
-            });
-        }
-        this.panel.addEventListener('keydown', event => {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                event.stopPropagation();
-                this.close();
-            }
-            // Small modal focus loop; hidden browser file inputs aren't tabbable.
-            if (event.key === 'Tab') {
-                const focusables = [
-                    this.panel.querySelector('#workspace-picker-close'),
-                    ...this.choices,
-                    this.panel.querySelector('#workspace-picker-cancel')
-                ];
-                const first = focusables[0];
-                const last = focusables[focusables.length - 1];
-                if (event.shiftKey && document.activeElement === first) {
-                    event.preventDefault();
-                    last.focus();
-                } else if (!event.shiftKey && document.activeElement === last) {
-                    event.preventDefault();
-                    first.focus();
-                }
-            }
-        });
-    }
-
-    open() {
-        this.panel.hidden = false;
-        this.choices[0].focus();
-    }
-
-    close(restoreFocus = true) {
-        this.panel.hidden = true;
-        if (restoreFocus) this.trigger.focus();
-    }
-}
-
 class WorkspaceAttachments {
     constructor(root, canSend, recipientId, sendFiles) {
         this.canSend = canSend;
         this.recipientId = recipientId;
         this.sendFiles = sendFiles;
         this.fileInput = root.querySelector('#workspace-file-input');
-        this.imageInput = root.querySelector('#workspace-image-input');
-        this.cameraInput = root.querySelector('#workspace-camera-input');
-        this.videoInput = root.querySelector('#workspace-video-input');
         this.fileButton = root.querySelector('#workspace-file-button');
-        this.picker = new WorkspaceUploadSheet(root, kind => this.openKind(kind));
         this.feedback = root.querySelector('#workspace-attachment-feedback');
         this.status = root.querySelector('#workspace-attachment-status');
         this.retry = root.querySelector('#workspace-attachment-retry');
         this.clear = root.querySelector('#workspace-attachment-clear');
         this.pendingFiles = [];
         this.pickerRecipientId = null;
-        this.useDocumentPicker = typeof window.showOpenFilePicker === 'function';
         this.bind();
     }
 
     bind() {
-        this.fileButton.addEventListener('click', () => {
-            if (!this.canSend()) return;
-            if (window.matchMedia('(max-width: 780px)').matches) {
-                this.picker.open();
-            } else {
-                this.pickerRecipientId = this.recipientId();
-                this.openFiles();
-            }
-        });
-        for (const input of [
-            this.fileInput, this.imageInput, this.cameraInput, this.videoInput
-        ]) {
-            input.addEventListener('change', () => this.onNativeFiles(input));
-        }
+        this.fileButton.addEventListener('click', () => this.openFiles());
+        this.fileInput.addEventListener('change', () => this.onNativeFiles());
         this.retry.addEventListener('click', () => this.sendPending());
         this.clear.addEventListener('click', () => this.clearDraft());
     }
 
-    openKind(kind) {
+    openFiles() {
         if (!this.canSend()) return;
         this.pickerRecipientId = this.recipientId();
-
-        switch (kind) {
-            case 'camera':
-                this.cameraInput.click();
-                break;
-            case 'video':
-                this.videoInput.click();
-                break;
-            case 'gallery':
-                this.imageInput.click();
-                break;
-            case 'files':
-                this.openFiles();
-                break;
-        }
+        this.fileInput.click();
     }
 
-    async openFiles() {
-        if (!this.canSend()) return;
-        this.pickerRecipientId = this.recipientId();
-
-        if (!this.useDocumentPicker) {
-            this.fileInput.click();
-            return;
-        }
-
-        try {
-            const handles = await window.showOpenFilePicker({
-                id: 'relay-documents',
-                startIn: 'documents',
-                multiple: true
-            });
-            const files = await Promise.all(handles.map(handle => handle.getFile()));
-            this.onChosen(files);
-        } catch (error) {
-            if (error.name === 'AbortError') return;
-            // On unsupported browsers fall back on the *next user click*.
-            // Trying to open another picker asynchronously may be blocked.
-            this.useDocumentPicker = false;
-            this.showStatus('系统文件选择器不可用，请再次选择「选择文件」');
-            console.warn('File picker fallback enabled:', error);
-        }
-    }
-
-    onNativeFiles(input) {
-        const files = [...input.files];
-        input.value = '';
+    onNativeFiles() {
+        const files = [...this.fileInput.files];
+        this.fileInput.value = '';
         this.onChosen(files);
     }
 
@@ -304,8 +180,8 @@ class WorkspaceAttachments {
             return;
         }
 
-        // Never send to a changed recipient automatically after a picker
-        // returned from the background. Explicit retry is required.
+        // A native picker can suspend the page. Never auto-send to a
+        // disconnected or changed recipient after returning.
         this.pendingFiles = files;
         this.refresh();
     }
@@ -322,17 +198,9 @@ class WorkspaceAttachments {
         this.refresh();
     }
 
-    showStatus(message) {
-        this.feedback.hidden = false;
-        this.status.textContent = message;
-        this.retry.hidden = true;
-        this.clear.hidden = true;
-    }
-
     refresh() {
         const online = this.canSend();
         this.fileButton.disabled = !online;
-        if (!online && !this.picker.panel.hidden) this.picker.close(false);
 
         const count = this.pendingFiles.length;
         this.feedback.hidden = count === 0;
