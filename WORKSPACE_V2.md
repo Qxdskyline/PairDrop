@@ -71,3 +71,20 @@ Original project: https://github.com/schlagmichdoch/PairDrop • GPL-3.0.
 - Native file picker backgrounding: if the browser suspends and a recipient disappears while picking, chosen files are held as an in-memory draft and require explicit retry after connection recovery. Never silently send to a different selected recipient.
 - Browser lifecycle remains under OS control. We do not modify WebSocket/WebRTC reconnect loops or claim background transfer is guaranteed. PairDrop already reconnects when the page becomes visible.
 - Regression: hover copy (desktop), photo/doc chooser (Android), select files while switching out of browser, paired peer visibility on return, receive text as bubble, file transfer confirmation and downloads.
+
+## V2.3 upload sheet and repeat downloads
+
+- The ColorOS/Android browser chooser in the screenshot is **native OS UI**. Web pages cannot insert entries into it. Instead, the `上传文件` action opens a separate accessible **app-owned** bottom sheet with `拍照`, `拍视频`, `照片和视频`, and `选择文件`.
+- Each route activates an appropriate system picker. Files use `showOpenFilePicker` when available or an `<input type=file accept="*/*">` fallback. The fallback may still show an additional OS chooser; this is controlled by the browser/device.
+- The two previously exposed gallery/file manager buttons are replaced with one `上传文件` entry. The draft-on-reconnection protection remains in `WorkspaceAttachments`.
+- Received files' `Blob` references are held only in the current page session, with a **256 MiB total upper bound**. A hover/focus (or visible touch) button next to the *received file bubble* can request another save using the cached files, without another network transfer. No binary data is copied or sent to a server by this feature.
+- Old items can lose their repeat-save button after memory eviction, but their text record remains. Page reload, browser termination or offline recipient cannot restore the underlying binary. Some mobile browsers may limit multiple downloads requested in a single gesture.
+- V1 remains unchanged. Incoming file receive confirmation and initial auto-download stay upstream. `network.js`, WebRTC and the signaling server stay untouched.
+
+Acceptance checks:
+- [ ] Mobile: one upload button opens app-owned 4-option sheet; selecting file, gallery, camera and video routes to browser/native UI
+- [ ] ESC/cancel/backdrop close the sheet; keyboard Tab stays in dialog
+- [ ] Mobile: returning from a system picker during a disconnect retains pending files for explicit send
+- [ ] Received file message shows hover/download action; click it to save again without sender retransmitting
+- [ ] Above 256 MiB cumulative retained files, older downloads are evicted and cannot be saved again
+- [ ] Switch between two paired devices: repeated downloads remain associated with correct conversation
