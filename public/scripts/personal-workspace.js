@@ -1,54 +1,113 @@
 /**
- * Personal Workspace
+ * relay. workspace adapter
  *
- * Presentation adapter for the upstream PairDrop event contract.
- * Owns only local device selection, compose controls and ephemeral activity.
- * Network, pairing, transfer permissions and download handling stay upstream.
+ * Four small view components. Each has one reason to change:
+ *   WorkspaceDevices      → discover/select a recipient
+ *   WorkspaceComposer     → compose and dispatch existing PairDrop events
+ *   WorkspaceSessionLog   → render short-lived, in-memory activity
+ *   PersonalWorkspace     → connect those views to upstream events
+ *
+ * No monkey-patching, no new transfer protocol, no new persistence.
  */
-class PersonalWorkspace {
-    constructor(root) {
+
+class WorkspaceDevices {
+    constructor(root, onSelectionChanged) {
         this.root = root;
-        this.devices = root.querySelector('x-peers');
+        this.onSelectionChanged = onSelectionChanged;
+        this.selectedId = null;
+        this.shareModeActive = false;
+
+        this.root.setAttribute('role', 'listbox');
+        this.root.setAttribute('aria-label', '在线设备');
+        this.bindSelection();
+    }
+
+    getPeers() {
+        return [...this.root.querySelectorAll('x-peer')];
+    }
+
+    current() {
+        return this.getPeers().find(peer => peer.id === this.selectedId);
+    }
+
+    bindSelection() {
+        // Upstream labels open the native file picker. A regular workspace
+        // click selects a peer instead, leaving the explicit attach action to
+        // WorkspaceComposer. Upstream share mode is deliberately untouched.
+        this.root.addEventListener('click', event => {
+            if (this.shareModeActive) return;
+            const peer = event.target.closest('x-peer');
+            if (!peer || peer.hasAttribute('status')) return;
+            event.preventDefault();
+            this.select(peer.id, true);
+        }, true);
+
+        this.root.addEventListener('keydown', event => {
+            const peer = event.target.closest('x-peer');
+            if (peer !== event.target || this.shareModeActive) return;
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            this.select(peer.id, true);
+        });
+    }
+
+    select(peerId, userInitiated = false) {
+        if (!this.getPeers().some(peer => peer.id === peerId)) return;
+        this.selectedId = peerId;
+        this.refresh();
+        this.onSelectionChanged(userInitiated);
+    }
+
+    onPeerAdded() {
+        const peers = this.getPeers();
+        if (!this.selectedId && peers.length === 1) {
+            this.selectedId = peers[0].id;
+        }
+        this.refresh();
+        this.onSelectionChanged(false);
+    }
+
+    onPeerDisconnected(peerId) {
+        if (this.selectedId === peerId) this.selectedId = null;
+        this.refresh();
+        this.onSelectionChanged(false);
+    }
+
+    setShareMode(active) {
+        this.shareModeActive = active;
+        this.refresh();
+    }
+
+    refresh() {
+        this.getPeers().forEach(peer => {
+            const selected = peer.id === this.selectedId;
+            peer.classList.toggle('workspace-selected', selected);
+            peer.setAttribute('role', 'option');
+            peer.setAttribute('aria-selected', String(selected));
+            peer.tabIndex = 0;
+
+            if (!this.shareModeActive) {
+                peer.querySelector('label').title =
+                    '选择设备。发送文件请使用右侧文件按钮。';
+            }
+        });
+    }
+}
+
+class WorkspaceComposer {
+    constructor(root, canSend, recipientId) {
+        this.root = root;
+        this.canSend = canSend;
+        this.recipientId = recipientId;
         this.editor = root.querySelector('#workspace-message');
         this.fileInput = root.querySelector('#workspace-file-input');
         this.fileButton = root.querySelector('#workspace-file-button');
         this.sendButton = root.querySelector('#workspace-send-button');
         this.dropZone = root.querySelector('.workspace-conversation');
-        this.activityList = root.querySelector('#workspace-activity');
-        this.selectedPeerId = null;
-        this.shareModeActive = false;
-        this.activities = new Map();
-
-        this.devices.setAttribute('role', 'listbox');
-        this.devices.setAttribute('aria-label', '在线设备');
-
-        this.bindControls();
-        this.bindPairDropEvents();
-        this.render();
+        this.bindInputs();
     }
 
-    bindControls() {
-        // PairDrop's device label normally opens a file picker. In the workspace,
-        // a normal click selects the device; the explicit attachment button sends.
-        this.devices.addEventListener('click', event => {
-            if (this.shareModeActive) return;
-
-            const peer = event.target.closest('x-peer');
-            if (!peer || peer.hasAttribute('status')) return;
-
-            event.preventDefault();
-            this.selectPeer(peer.id);
-        }, true);
-
-        this.devices.addEventListener('keydown', event => {
-            const peer = event.target.closest('x-peer');
-            if (peer !== event.target || this.shareModeActive) return;
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-
-            event.preventDefault();
-            this.selectPeer(peer.id);
-        });
-
+    bindInputs() {
         this.fileButton.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', () => {
             if (this.fileInput.files.length) {
@@ -57,18 +116,20 @@ class PersonalWorkspace {
             this.fileInput.value = '';
         });
 
-        this.sendButton.addEventListener('click', () => this.sendMessage());
-        this.editor.addEventListener('input', () => this.updateComposer());
+        this.sendButton.addEventListener('click', () => this.sendDraft());
+        this.editor.addEventListener('input', () => this.refresh());
 
         this.editor.addEventListener('keydown', event => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
+            if (event.key === 'Enter' && !event.shiftKey &&
+                !event.isComposing && event.keyCode !== 229) {
                 event.preventDefault();
-                this.sendMessage();
+                this.sendDraft();
             }
             event.stopPropagation();
         });
 
-        // Prevent upstream's global paste-to-share shortcut while composing.
+        // PairDrop listens for global paste-to-share. Pasting into an editor
+        // must be a normal text-editing operation, not a share-mode trigger.
         this.editor.addEventListener('paste', event => event.stopPropagation());
 
         this.dropZone.addEventListener('dragover', event => {
@@ -98,136 +159,13 @@ class PersonalWorkspace {
                 if (text.trim()) this.sendText(text);
             }
         });
-
-        root.querySelector('#workspace-pair-button')
-            .addEventListener('click', () => document.getElementById('pair-device').click());
-        root.querySelector('#workspace-room-button')
-            .addEventListener('click', () => document.getElementById('join-public-room').click());
     }
 
-    bindPairDropEvents() {
-        window.addEventListener('peer-added', () => {
-            const peers = this.getPeers();
-            if (!this.selectedPeerId && peers.length === 1) {
-                this.selectedPeerId = peers[0].id;
-            }
-            this.render();
-        });
-
-        window.addEventListener('peer-disconnected', event => {
-            if (this.selectedPeerId === event.detail) this.selectedPeerId = null;
-            queueMicrotask(() => this.render());
-        });
-
-        window.addEventListener('peer-display-name-changed', () => this.render());
-        window.addEventListener('room-type-removed', () => this.render());
-
-        window.addEventListener('share-mode-changed', event => {
-            this.shareModeActive = !!event.detail.active;
-            this.updateComposer();
-        });
-
-        window.addEventListener('ws-connected', () => this.renderConnection(true));
-        window.addEventListener('ws-disconnected', () => this.renderConnection(false));
-
-        // Activity is session-only. It is never stored or uploaded by this adapter.
-        window.addEventListener('send-text', event => {
-            this.record(event.detail.to, 'outgoing', 'text', event.detail.text);
-        });
-        window.addEventListener('files-selected', event => {
-            const files = [...event.detail.files];
-            this.record(event.detail.to, 'outgoing', 'files',
-                files.map(file => file.name).join(' · '));
-        });
-        window.addEventListener('text-received', event => {
-            this.record(event.detail.peerId, 'incoming', 'text', event.detail.text);
-        });
-        window.addEventListener('files-received', event => {
-            this.record(event.detail.peerId, 'incoming', 'files',
-                event.detail.files.map(file => file.name).join(' · '));
-        });
+    focus() {
+        this.editor.focus();
     }
 
-    getPeers() {
-        return [...this.devices.querySelectorAll('x-peer')];
-    }
-
-    getSelectedPeer() {
-        return this.getPeers().find(peer => peer.id === this.selectedPeerId);
-    }
-
-    canSend() {
-        return !!this.getSelectedPeer() && !this.shareModeActive;
-    }
-
-    selectPeer(peerId) {
-        if (!this.getPeers().some(peer => peer.id === peerId)) return;
-        this.selectedPeerId = peerId;
-        this.render();
-        if (window.matchMedia('(min-width: 780px)').matches) this.editor.focus();
-    }
-
-    sendMessage() {
-        const text = this.editor.value.trim();
-        if (!text || !this.canSend()) return;
-        this.sendText(text);
-        this.editor.value = '';
-        this.updateComposer();
-    }
-
-    sendText(text) {
-        window.dispatchEvent(new CustomEvent('send-text', {
-            detail: { text, to: this.selectedPeerId }
-        }));
-    }
-
-    sendFiles(files) {
-        if (!files.length || !this.canSend()) return;
-        window.dispatchEvent(new CustomEvent('files-selected', {
-            detail: { files, to: this.selectedPeerId }
-        }));
-    }
-
-    record(peerId, direction, kind, value) {
-        if (!peerId || !value) return;
-
-        const history = this.activities.get(peerId) || [];
-        history.push({ direction, kind, value, time: new Date() });
-        this.activities.set(peerId, history.slice(-30));
-
-        if (this.selectedPeerId === peerId) this.renderActivity();
-    }
-
-    render() {
-        const peers = this.getPeers();
-        const current = this.getSelectedPeer();
-
-        this.root.querySelector('#workspace-device-count').textContent =
-            String(peers.length);
-
-        peers.forEach(peer => {
-            const isSelected = peer.id === this.selectedPeerId;
-            peer.classList.toggle('workspace-selected', isSelected);
-            peer.setAttribute('role', 'option');
-            peer.tabIndex = 0;
-            peer.setAttribute('aria-selected', String(isSelected));
-            if (!this.shareModeActive) {
-                peer.querySelector('label').title = '选择设备。发送文件请使用右侧文件按钮。';
-            }
-        });
-
-        this.root.classList.toggle('workspace-has-selection', !!current);
-        this.root.querySelector('#workspace-recipient').textContent =
-            current?.querySelector('.name')?.textContent || '还没有选择设备';
-        this.root.querySelector('#workspace-recipient-detail').textContent =
-            current?.querySelector('.device-name')?.textContent ||
-            '选择左侧的在线设备后即可开始传输';
-
-        this.updateComposer();
-        this.renderActivity();
-    }
-
-    updateComposer() {
+    refresh() {
         const enabled = this.canSend();
         this.editor.disabled = !enabled;
         this.fileButton.disabled = !enabled;
@@ -237,42 +175,178 @@ class PersonalWorkspace {
             : '等待你选择一台在线设备…';
     }
 
-    renderConnection(connected) {
-        const status = this.root.querySelector('#workspace-connection');
-        status.textContent = connected ? '信令已连接' : '正在连接…';
-        status.classList.toggle('is-online', connected);
+    sendDraft() {
+        const text = this.editor.value.trim();
+        if (!text || !this.canSend()) return;
+        this.sendText(text);
+        this.editor.value = '';
+        this.refresh();
     }
 
-    renderActivity() {
-        const history = this.activities.get(this.selectedPeerId) || [];
-        this.activityList.replaceChildren();
+    sendText(text) {
+        this.emit('send-text', {text, to: this.recipientId()});
+    }
 
-        this.root.querySelector('#workspace-empty-activity').hidden = history.length > 0;
+    sendFiles(files) {
+        if (!files.length || !this.canSend()) return;
+        this.emit('files-selected', {files, to: this.recipientId()});
+    }
+
+    emit(type, detail) {
+        // Reuse the same event contract as PeerUI and PeersManager.
+        window.dispatchEvent(new CustomEvent(type, {detail}));
+    }
+}
+
+class WorkspaceSessionLog {
+    constructor(root) {
+        this.root = root;
+        this.list = root.querySelector('#workspace-activity');
+        this.empty = root.querySelector('#workspace-empty-activity');
+        this.byPeer = new Map();
+        this.currentId = null;
+    }
+
+    select(peerId) {
+        this.currentId = peerId;
+        this.render();
+    }
+
+    add(peerId, direction, kind, value) {
+        if (!peerId || !value) return;
+        const history = this.byPeer.get(peerId) || [];
+
+        history.push({direction, kind, value, time: new Date()});
+        this.byPeer.set(peerId, history.slice(-30));
+
+        if (peerId === this.currentId) this.render();
+    }
+
+    render() {
+        const history = this.byPeer.get(this.currentId) || [];
+        this.list.replaceChildren();
+        this.empty.hidden = history.length > 0;
         if (!history.length) return;
 
         const fragment = document.createDocumentFragment();
+        history.forEach(entry => fragment.append(this.renderEntry(entry)));
+        this.list.append(fragment);
+        this.list.scrollTop = this.list.scrollHeight;
+    }
 
-        history.forEach(activity => {
-            const item = document.createElement('div');
-            item.className = 'workspace-activity-item ' + activity.direction;
+    renderEntry(entry) {
+        const item = document.createElement('div');
+        item.className = 'workspace-activity-item ' + entry.direction;
 
-            const message = document.createElement('div');
-            message.className = 'workspace-activity-message';
-            message.textContent = activity.value;
+        const message = document.createElement('div');
+        message.className = 'workspace-activity-message';
+        // Safe even if a peer sends HTML-like text.
+        message.textContent = entry.value;
 
-            const meta = document.createElement('div');
-            meta.className = 'workspace-activity-meta';
-            meta.textContent =
-                (activity.direction === 'incoming' ? '已接收' : '已发起发送') +
-                ' · ' + (activity.kind === 'files' ? '文件' : '文字') +
-                ' · ' + activity.time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        const meta = document.createElement('div');
+        meta.className = 'workspace-activity-meta';
+        meta.textContent =
+            (entry.direction === 'incoming' ? '已接收' : '已发起发送') +
+            ' · ' + (entry.kind === 'files' ? '文件' : '文字') +
+            ' · ' + entry.time.toLocaleTimeString([], {
+                hour: '2-digit', minute: '2-digit'
+            });
 
-            item.append(message, meta);
-            fragment.append(item);
+        item.append(message, meta);
+        return item;
+    }
+}
+
+class PersonalWorkspace {
+    constructor(root) {
+        this.root = root;
+        this.devices = new WorkspaceDevices(
+            root.querySelector('x-peers'),
+            userInitiated => this.refresh(userInitiated)
+        );
+        this.composer = new WorkspaceComposer(
+            root,
+            () => this.canSend(),
+            () => this.devices.selectedId
+        );
+        this.activity = new WorkspaceSessionLog(root);
+
+        this.bindActions();
+        this.bindEvents();
+        this.refresh();
+    }
+
+    canSend() {
+        return !!this.devices.current() && !this.devices.shareModeActive;
+    }
+
+    bindActions() {
+        this.root.querySelector('#workspace-pair-button')
+            .addEventListener('click', () => document.getElementById('pair-device').click());
+        this.root.querySelector('#workspace-room-button')
+            .addEventListener('click', () => document.getElementById('join-public-room').click());
+    }
+
+    bindEvents() {
+        window.addEventListener('peer-added', () => this.devices.onPeerAdded());
+        window.addEventListener('peer-disconnected', event => {
+            // Let upstream PeerUI finish removing its x-peer element first.
+            queueMicrotask(() => this.devices.onPeerDisconnected(event.detail));
+        });
+        window.addEventListener('peer-display-name-changed', () => this.refresh());
+        window.addEventListener('room-type-removed', () => this.devices.refresh());
+
+        window.addEventListener('share-mode-changed', event => {
+            this.devices.setShareMode(!!event.detail.active);
+            this.composer.refresh();
         });
 
-        this.activityList.append(fragment);
-        this.activityList.scrollTop = this.activityList.scrollHeight;
+        window.addEventListener('ws-connected', () => this.showConnection(true));
+        window.addEventListener('ws-disconnected', () => this.showConnection(false));
+
+        // Session log is a non-authoritative display, never persisted.
+        window.addEventListener('send-text', event => {
+            this.activity.add(event.detail.to, 'outgoing', 'text', event.detail.text);
+        });
+        window.addEventListener('files-selected', event => {
+            const filenames = [...event.detail.files].map(file => file.name).join(' · ');
+            this.activity.add(event.detail.to, 'outgoing', 'files', filenames);
+        });
+        window.addEventListener('text-received', event => {
+            this.activity.add(event.detail.peerId, 'incoming', 'text', event.detail.text);
+        });
+        window.addEventListener('files-received', event => {
+            const filenames = event.detail.files.map(file => file.name).join(' · ');
+            this.activity.add(event.detail.peerId, 'incoming', 'files', filenames);
+        });
+    }
+
+    showConnection(online) {
+        const status = this.root.querySelector('#workspace-connection');
+        status.textContent = online ? '信令已连接' : '正在连接…';
+        status.classList.toggle('is-online', online);
+    }
+
+    refresh(focusComposer = false) {
+        const peers = this.devices.getPeers();
+        const selected = this.devices.current();
+
+        this.root.querySelector('#workspace-device-count').textContent =
+            String(peers.length);
+        this.root.classList.toggle('workspace-has-selection', !!selected);
+
+        this.root.querySelector('#workspace-recipient').textContent =
+            selected?.querySelector('.name')?.textContent || '还没有选择设备';
+        this.root.querySelector('#workspace-recipient-detail').textContent =
+            selected?.querySelector('.device-name')?.textContent ||
+            '选择左侧的在线设备后即可开始传输';
+
+        this.activity.select(this.devices.selectedId);
+        this.composer.refresh();
+
+        if (focusComposer && window.matchMedia('(min-width: 780px)').matches) {
+            this.composer.focus();
+        }
     }
 }
 
