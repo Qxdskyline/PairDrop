@@ -2017,9 +2017,9 @@ class ReceiveTextDialog extends Dialog {
     constructor() {
         super('receive-text-dialog');
         Events.on('text-received', e => {
-            // A custom presentation may explicitly take over received text.
-            // Default PairDrop pages keep their existing modal behavior.
-            if (document.body.dataset.textReceiver === 'conversation') return;
+            // The workspace owns received text bubbles. Legacy pages retain
+            // the original modal without depending on script execution order.
+            if (document.getElementById('personal-workspace')) return;
             this._onText(e.detail.text, e.detail.peerId);
         });
         this.$text = this.$el.querySelector('#text');
